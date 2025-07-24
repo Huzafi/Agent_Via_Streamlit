@@ -1,0 +1,10 @@
+!pip instal streamlit
+
+!pip install -Uq openai-agents
+
+make file app.py
+
+# Run File
+
+
+streamlt run app.py
