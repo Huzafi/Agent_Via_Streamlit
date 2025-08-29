@@ -29,16 +29,23 @@ config = RunConfig(
 
 agent = Agent(
     name="Assistant",
-    instructions="You are a helpful assistant.",
+    instructions=(
+        "You are a helpful assistant. Always respond based on the conversation context. "
+        "If unsure, politely say 'I'm not sure about that.' Keep responses concise and relevant."
+    ),
     model=model
 )
 
-# Async function to get agent's response
-async def get_agent_response(user_input):
-    result = await Runner.run(agent, user_input, run_config=config)
-    return result.final_output
+async def get_agent_response(user_input, chat_history):
+    context = ""
+    for chat in chat_history:
+        sender = "User" if chat["sender"] == "user" else "Assistant"
+        context += f"{sender}: {chat['message']}\n"
+    context += f"User: {user_input}\nAssistant:"
 
-# Helper to run async safely in Streamlit
+    result = await Runner.run(agent, context, run_config=config)
+    return result.final_output.strip()
+
 def run_asyncio_task(task):
     try:
         loop = asyncio.get_running_loop()
@@ -50,10 +57,8 @@ def run_asyncio_task(task):
     else:
         return asyncio.run(task)
 
-# Streamlit UI
-st.title("AI Chat Assistant")
+st.title("AI Chat Assistant ")
 
-# Initialize session state to store chat history
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
@@ -64,24 +69,18 @@ for chat in st.session_state.chat_history:
     else:
         st.markdown(f"**🤖 Assistant:** {chat['message']}")
 
-# User input box
-user_input = st.text_input("💬 Type your message:")
+# Form style input with arrow button
+with st.form(key="chat_form", clear_on_submit=True):
+    user_input = st.text_input("💬 Type your message:")
+    submit_button = st.form_submit_button("➤")  # Arrow button
 
-if st.button("✨ Send"):
-    if user_input:
-        # Add user message to chat history
+    if submit_button and user_input.strip():
         st.session_state.chat_history.append({"sender": "user", "message": user_input})
-
-        with st.spinner("Agent has Process... 💭"):
-            response = run_asyncio_task(get_agent_response(user_input))
+        with st.spinner("Assistant is thinking... 💭"):
+            response = run_asyncio_task(get_agent_response(user_input, st.session_state.chat_history))
             if asyncio.isfuture(response):
                 response = asyncio.run(response)
-
-        # Add assistant response to chat history
         st.session_state.chat_history.append({"sender": "assistant", "message": response})
-
-        # Rerun to refresh chat display
-        st.rerun()
-
-    else:
-        st.warning("Please type  😘")
+        st.experimental_rerun()
+    elif submit_button:
+        st.warning("Please type something before sending ")
